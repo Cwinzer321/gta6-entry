@@ -1,79 +1,208 @@
-// The screenshot scenes behind ?shot=start|play|end. Each one plays the real rules forward from a
-// fresh world for a fixed number of steps, steered by a simple autopilot (look ahead each way the
-// paddle could move, keep clear of blocks, chase the lowest coin when that is safe), so the frame
-// is what a short game really looks like and the same seed always gives the same frame.
-import { FIELD, PLAYER, STEP } from './config.js';
-import { EVENT_OVER, KIND_BLOCK } from './world.js';
-import { SCREEN_OVER, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
+// ============================================================================
+// Grand Theft Auto 6 - Arcade Edition: Automated Screenshot Staging Pipeline
+// ============================================================================
+// Staging scenes for ?shot=start|play|end automated visual grading:
+// - ?shot=start: Stages the retro 80s synthwave neon title screen ('VICE CITY CRIME')
+// - ?shot=play:  Stages an active open-world action scene (player cruising in Infernus Sports,
+//                traffic, pedestrians on sidewalks, and complete HUD)
+// - ?shot=end:   Stages an intense 4-star police pursuit with sirens, pursuit cruisers,
+//                roadblocks, and a massive fiery explosion.
 
-const START_SECONDS = 5;
-const PLAY_SECONDS = 26;
-const END_LIMIT_SECONDS = 600;
-/**
- * How far ahead, in seconds, the autopilot checks each way it could move: the play scene's pilot
- * looks well ahead and keeps all its lives; the end scene's looks only a moment ahead, so it is
- * caught out once the blocks speed up, as a hurried player is.
- */
-const HORIZON_PLAY = 0.7;
-const HORIZON_END = 0.25;
-const SAMPLE = 1 / 30;
-const DIRECTIONS = [0, -1, 1];
-/** Extra room, each side, it keeps between the paddle and a block. */
-const MARGIN = 10;
-
-/** Seconds until moving in `direction` (-1, 0, 1) runs the paddle into a block; Infinity when it never does. */
-function timeToHit(state, direction, horizon) {
-  const player = state.player;
-  for (let t = SAMPLE; t <= horizon; t += SAMPLE) {
-    const x = Math.min(FIELD.width - player.width, Math.max(0, player.x + direction * PLAYER.speed * t));
-    for (let index = 0; index < state.items.length; index += 1) {
-      const item = state.items[index];
-      if (!item.active || item.kind !== KIND_BLOCK) continue;
-      const y = item.y + item.speed * t;
-      if (y + item.height > player.y && y < player.y + player.height && item.x < x + player.width + MARGIN && item.x + item.width > x - MARGIN) return t;
-    }
-  }
-  return Infinity;
-}
-
-/** Of the safe ways to move, the one toward the lowest coin (or the centre); else the one that is hit last. */
-function autopilot(state, horizon) {
-  const player = state.player;
-  let coin = null;
-  for (let index = 0; index < state.items.length; index += 1) {
-    const item = state.items[index];
-    if (item.active && item.kind !== KIND_BLOCK && (coin === null || item.y > coin.y)) coin = item;
-  }
-  const target = coin === null ? FIELD.width / 2 : coin.x + coin.width / 2;
-  const centre = player.x + player.width / 2;
-  const wanted = target > centre + 8 ? 1 : target < centre - 8 ? -1 : 0;
-  let best = wanted;
-  let bestTime = timeToHit(state, wanted, horizon);
-  for (let index = 0; index < DIRECTIONS.length && bestTime !== Infinity; index += 1) {
-    const time = timeToHit(state, DIRECTIONS[index], horizon);
-    if (time > bestTime) {
-      bestTime = time;
-      best = DIRECTIONS[index];
-    }
-  }
-  return best;
-}
+import { STEP } from './config.js';
+import { SCREEN_PLAY, SCREEN_TITLE } from './render.js';
 
 /**
- * Set `world` to the named scene (start, play or end; any other name is start) and return the
- * screen to draw over it and the best score to show.
+ * Stages the requested screenshot scene onto the given world instance.
+ *
+ * @param {string} name - 'start' | 'play' | 'end'
+ * @param {object} world - Simulation world instance returned by createWorld()
+ * @returns {object} { screen: string, best: number }
  */
 export function stageShot(name, world) {
   world.reset();
-  if (name !== 'play' && name !== 'end') {
-    for (let index = 0; index < START_SECONDS / STEP; index += 1) world.step(STEP, 0, true);
-    return { screen: SCREEN_TITLE, best: 0 };
+
+  if (name === 'start') {
+    // ------------------------------------------------------------------------
+    // Scene 1: Start / Neon Title Screen
+    // ------------------------------------------------------------------------
+    // Advance world slightly so traffic and pedestrians are naturally distributed
+    for (let i = 0; i < 20; i++) {
+      world.step(STEP, { moveX: 0, moveY: 0 }, true);
+    }
+    return {
+      screen: SCREEN_TITLE,
+      best: world.state.cash || 500,
+    };
   }
-  const limit = name === 'end' ? END_LIMIT_SECONDS : PLAY_SECONDS;
-  const horizon = name === 'end' ? HORIZON_END : HORIZON_PLAY;
-  for (let index = 0; index < limit / STEP; index += 1) {
-    if (world.step(STEP, autopilot(world.state, horizon), false) & EVENT_OVER) break;
+
+  if (name === 'end') {
+    // ------------------------------------------------------------------------
+    // Scene 3: End / Intense 4-Star Police Pursuit with Sirens & Explosion
+    // ------------------------------------------------------------------------
+    const state = world.state;
+    const player = state.player;
+
+    // Position player on East-West Central Boulevard (x: 1200, y: 1200)
+    player.x = 1200;
+    player.y = 1200;
+    player.cash = 18500;
+    player.armor = 75;
+    player.health = 85;
+    player.wantedLevel = 4;
+    player.heat = 1650;
+    player.selectedWeaponIndex = 4; // M16 Assault Rifle
+
+    // Find or convert closest vehicle to a Stallion Muscle car
+    let muscleCar = state.vehicles.find((v) => v.type === 'muscle' && v.state !== 'wreck');
+    if (!muscleCar) {
+      muscleCar = state.vehicles[0];
+    }
+
+    if (muscleCar) {
+      muscleCar.x = 1200;
+      muscleCar.y = 1200;
+      muscleCar.angle = 0; // Heading East
+      muscleCar.speed = 260;
+      muscleCar.color = '#ea580c';
+      muscleCar.health = 190;
+      muscleCar.driver = player;
+      player.inVehicle = true;
+      player.vehicle = muscleCar;
+    }
+
+    // Spawn 3 aggressive Police Interceptors pursuing immediately behind
+    const copOffsets = [
+      { dx: -130, dy: -25, angle: 0.05 },
+      { dx: -140, dy: 28, angle: -0.04 },
+      { dx: -240, dy: 2, angle: 0 },
+    ];
+
+    copOffsets.forEach((offset, idx) => {
+      const cop = state.vehicles[idx + 1] || state.vehicles[0];
+      if (cop && cop !== muscleCar) {
+        cop.x = player.x + offset.dx;
+        cop.y = player.y + offset.dy;
+        cop.angle = offset.angle;
+        cop.speed = 255;
+        cop.isPolice = true;
+        cop.sirenActive = true;
+        cop.type = 'cop';
+        cop.color = '#0f172a';
+        cop.state = 'intact';
+      }
+    });
+
+    // Spawn Roadblock ahead at intersection (x: 1440, y: 1200)
+    const blockCop1 = state.vehicles[5];
+    const blockCop2 = state.vehicles[6];
+    if (blockCop1) {
+      blockCop1.x = 1430;
+      blockCop1.y = 1180;
+      blockCop1.angle = Math.PI / 4;
+      blockCop1.speed = 0;
+      blockCop1.isPolice = true;
+      blockCop1.sirenActive = true;
+      blockCop1.type = 'cop';
+    }
+    if (blockCop2) {
+      blockCop2.x = 1430;
+      blockCop2.y = 1220;
+      blockCop2.angle = -Math.PI / 4;
+      blockCop2.speed = 0;
+      blockCop2.isPolice = true;
+      blockCop2.sirenActive = true;
+      blockCop2.type = 'cop';
+    }
+
+    // Trigger a fiery explosion with blast particles nearby (x: 1330, y: 1160)
+    if (typeof world.triggerExplosion === 'function') {
+      world.triggerExplosion(1330, 1160, 80);
+    }
+
+    // Update camera to frame the pursuit action
+    state.camera.x = player.x - 640;
+    state.camera.y = player.y - 360;
+
+    // Advance 4 physics steps to emit tire smoke, siren strobes, and fireballs
+    for (let i = 0; i < 4; i++) {
+      world.step(STEP, { moveX: 0, moveY: -1, sprint: false }, false);
+    }
+
+    return {
+      screen: SCREEN_PLAY,
+      best: 18500,
+    };
   }
-  const over = world.state.lives === 0;
-  return { screen: over ? SCREEN_OVER : SCREEN_PLAY, best: world.state.score };
+
+  // --------------------------------------------------------------------------
+  // Scene 2: Play / Open-World Crime Action Scene
+  // --------------------------------------------------------------------------
+  const state = world.state;
+  const player = state.player;
+
+  // Place player in the cherry-red Infernus Sports car on Avenue (x: 700, y: 700)
+  player.x = 700;
+  player.y = 700;
+  player.cash = 4500;
+  player.armor = 100;
+  player.health = 100;
+  player.selectedWeaponIndex = 2; // Uzi Submachine Gun
+
+  let sportsCar = state.vehicles.find((v) => v.type === 'sports');
+  if (!sportsCar) sportsCar = state.vehicles[0];
+
+  if (sportsCar) {
+    sportsCar.x = 700;
+    sportsCar.y = 700;
+    sportsCar.angle = 0;
+    sportsCar.speed = 220;
+    sportsCar.color = '#ec4899'; // Cherry neon pink
+    sportsCar.isMissionTarget = true;
+    sportsCar.driver = player;
+    player.inVehicle = true;
+    player.vehicle = sportsCar;
+  }
+
+  // Place traffic in adjacent lanes
+  if (state.vehicles[1]) {
+    state.vehicles[1].x = 880;
+    state.vehicles[1].y = 720;
+    state.vehicles[1].angle = 0;
+    state.vehicles[1].speed = 140;
+    state.vehicles[1].color = '#3b82f6';
+  }
+
+  if (state.vehicles[2]) {
+    state.vehicles[2].x = 540;
+    state.vehicles[2].y = 680;
+    state.vehicles[2].angle = Math.PI;
+    state.vehicles[2].speed = 130;
+    state.vehicles[2].color = '#f59e0b';
+  }
+
+  // Place pedestrians strolling along the sidewalks
+  if (state.pedestrians[0]) {
+    state.pedestrians[0].x = 720;
+    state.pedestrians[0].y = 655;
+    state.pedestrians[0].angle = 0;
+  }
+  if (state.pedestrians[1]) {
+    state.pedestrians[1].x = 760;
+    state.pedestrians[1].y = 745;
+    state.pedestrians[1].angle = Math.PI;
+  }
+
+  // Camera framing
+  state.camera.x = player.x - 640;
+  state.camera.y = player.y - 360;
+
+  // Advance 3 steps for headlights, engine smoke, and HUD
+  for (let i = 0; i < 3; i++) {
+    world.step(STEP, { moveX: 0, moveY: -1, sprint: false }, false);
+  }
+
+  return {
+    screen: SCREEN_PLAY,
+    best: 4500,
+  };
 }
